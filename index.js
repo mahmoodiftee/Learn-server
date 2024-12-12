@@ -1,6 +1,8 @@
 require("dotenv").config();
 const express = require("express");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { MongoClient, ObjectId } = require("mongodb");
+const bcrypt = require("bcrypt"); // For password hashing
+const jwt = require("jsonwebtoken"); // For JWT token generation
 const cors = require("cors");
 
 const port = process.env.PORT || 3001;
@@ -10,9 +12,9 @@ const app = express();
 app.use(
   cors({
     origin: [
-      "http://localhost:5173",
+      "http://localhost:5173", // Your frontend's local URL
       "http://localhost:5174",
-      "http://your-production-frontend.com",
+      "http://your-production-frontend.com", // Production URL
     ],
   })
 );
@@ -23,7 +25,7 @@ const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster
 
 const client = new MongoClient(uri, {
   serverApi: {
-    version: ServerApiVersion.v1,
+    version: "1",
     strict: true,
     deprecationErrors: true,
   },
@@ -41,7 +43,7 @@ async function run() {
     const db = client.db("Learn");
     const lessonsCollection = db.collection("lessons");
     const ytLinksCollection = db.collection("ytLinks");
-
+    const usersCollection = db.collection("users");
     // Create a route to fetch all tutorials
     app.get("/tutorials", async (req, res) => {
       try {
@@ -84,6 +86,85 @@ async function run() {
       } catch (error) {
         console.error("Error adding lesson:", error);
         res.status(500).json({ error: "Failed to add lesson" });
+      }
+    });
+
+    app.post("/registration", async (req, res) => {
+      try {
+        const { name, email, password, profileImage } = req.body;
+
+        // Check if the email already exists
+        const existingUser = await usersCollection.findOne({ email });
+        if (existingUser) {
+          return res.status(400).json({
+            error: "Email already exists. Please use a different email.",
+          });
+        }
+
+        // Hash the password before storing it
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = {
+          name,
+          email,
+          password: hashedPassword,
+          profileImage: profileImage || null,
+          role: "user",
+        };
+
+        const result = await usersCollection.insertOne(newUser);
+        res.status(201).json({
+          message: "User registered successfully",
+          userId: result.insertedId,
+        });
+      } catch (error) {
+        console.error("Error during registration:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred during registration." });
+      }
+    });
+
+    app.post("/login", async (req, res) => {
+      try {
+        console.log("Login request received", req.body); // Log request body
+
+        const { email, password } = req.body;
+
+        // Find user by email
+        const user = await usersCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        // Check if the password is correct
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+          return res.status(401).json({ error: "Invalid password" });
+        }
+
+        // Generate JWT token
+        const token = jwt.sign(
+          { userId: user._id, email: user.email },
+          process.env.JWT_SECRET,
+          { expiresIn: "3h" }
+        );
+
+        // Send response with token and user info (without password)
+        res.status(200).json({
+          message: "Login successful",
+          user: {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            profileImage: user.profileImage,
+            role: user.role,
+          },
+          token,
+        });
+      } catch (error) {
+        console.error("Error during login:", error);
+        res.status(500).json({ error: "An error occurred during login" });
       }
     });
 
