@@ -54,7 +54,21 @@ async function run() {
         res.status(500).json({ error: "Failed to fetch lessons" });
       }
     });
-
+    // Create a route to fetch a single lesson by its lesson number
+    app.get("/lessons/:lessonId", async (req, res) => {
+      try {
+        const lessonId = req.params.lessonId;
+        const objectId = new ObjectId(lessonId);
+        const lesson = await lessonsCollection.findOne({ _id: objectId });
+        if (!lesson) {
+          return res.status(404).json({ error: "Lesson not found" });
+        }
+        res.status(200).json(lesson);
+      } catch (error) {
+        console.error("Error fetching lesson:", error);
+        res.status(500).json({ error: "Failed to fetch lesson" });
+      }
+    });
     // Create a route to fetch all lessons
     app.get("/lessons", async (req, res) => {
       try {
@@ -168,22 +182,6 @@ async function run() {
       }
     });
 
-    // Create a route to fetch a single lesson by its lesson number
-    app.get("/lessons/:lessonId", async (req, res) => {
-      try {
-        const lessonId = req.params.lessonId;
-        const objectId = new ObjectId(lessonId);
-        const lesson = await lessonsCollection.findOne({ _id: objectId });
-        if (!lesson) {
-          return res.status(404).json({ error: "Lesson not found" });
-        }
-        res.status(200).json(lesson);
-      } catch (error) {
-        console.error("Error fetching lesson:", error);
-        res.status(500).json({ error: "Failed to fetch lesson" });
-      }
-    });
-
     app.patch("/lessons/:lessonId", async (req, res) => {
       try {
         const { lesson, title } = req.body;
@@ -231,6 +229,33 @@ async function run() {
         res
           .status(500)
           .json({ success: false, message: "Failed to update lesson" });
+      }
+    });
+
+    // Create a route to delete a lesson by its lessonId
+    app.delete("/lessons/:lessonId", async (req, res) => {
+      try {
+        const lessonId = req.params.lessonId;
+        const objectId = new ObjectId(lessonId); /
+
+        // Check if the lesson exists
+        const lesson = await lessonsCollection.findOne({ _id: objectId });
+        if (!lesson) {
+          return res.status(404).json({ error: "Lesson not found" });
+        }
+
+        // Delete the lesson
+        const result = await lessonsCollection.deleteOne({ _id: objectId });
+
+        // Check if the lesson was deleted
+        if (result.deletedCount === 0) {
+          return res.status(500).json({ error: "Failed to delete the lesson" });
+        }
+
+        res.status(200).json({ message: "Lesson deleted successfully" });
+      } catch (error) {
+        console.error("Error deleting lesson:", error);
+        res.status(500).json({ error: "Failed to delete lesson" });
       }
     });
   } catch (error) {
