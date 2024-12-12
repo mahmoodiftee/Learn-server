@@ -79,6 +79,15 @@ async function run() {
         res.status(500).json({ error: "Failed to fetch lessons" });
       }
     });
+    app.get("/users", async (req, res) => {
+      try {
+        const users = await usersCollection.find({}).toArray();
+        res.status(200).json(lessons);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).json({ error: "Failed to fetch users" });
+      }
+    });
 
     app.post("/lessons", async (req, res) => {
       try {
@@ -236,7 +245,7 @@ async function run() {
     app.delete("/lessons/:lessonId", async (req, res) => {
       try {
         const lessonId = req.params.lessonId;
-        const objectId = new ObjectId(lessonId); /
+        const objectId = new ObjectId(lessonId);
 
         // Check if the lesson exists
         const lesson = await lessonsCollection.findOne({ _id: objectId });
