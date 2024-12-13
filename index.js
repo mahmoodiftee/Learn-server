@@ -311,6 +311,71 @@ async function run() {
       }
     });
 
+    // Update vocabulary in a specific lesson by lessonId and pronunciation
+    app.patch(
+      "/lessons/:lessonId/vocabulary/:pronunciation",
+      async (req, res) => {
+        try {
+          const { lessonId, pronunciation } = req.params;
+          const { word, meaning, when, lessonNo, adminEmail } = req.body;
+
+          // Convert lessonId to ObjectId for MongoDB query
+          const objectId = new ObjectId(lessonId);
+
+          // Find the lesson by its ObjectId
+          const lesson = await lessonsCollection.findOne({ _id: objectId });
+
+          if (!lesson) {
+            return res.status(404).json({ error: "Lesson not found" });
+          }
+
+          // Find the specific vocabulary item in the lesson's vocab array using pronunciation
+          const vocabIndex = lesson.vocab.findIndex(
+            (vocab) => vocab.pronunciation === pronunciation
+          );
+
+          if (vocabIndex === -1) {
+            return res.status(404).json({ error: "Vocabulary not found" });
+          }
+
+          // Update the vocabulary item in the array (modify fields as needed)
+          lesson.vocab[vocabIndex] = {
+            ...lesson.vocab[vocabIndex], // Keep existing fields
+            word: word || lesson.vocab[vocabIndex].word,
+            meaning: meaning || lesson.vocab[vocabIndex].meaning,
+            when: when || lesson.vocab[vocabIndex].when,
+            lessonNo: lessonNo || lesson.vocab[vocabIndex].lessonNo,
+            adminEmail: adminEmail || lesson.vocab[vocabIndex].adminEmail,
+          };
+
+          // Perform the update in the database using the $set operator
+          const updateResult = await lessonsCollection.updateOne(
+            { _id: objectId }, // Use ObjectId for querying
+            { $set: { vocab: lesson.vocab } }
+          );
+
+          if (updateResult.modifiedCount === 0) {
+            return res
+              .status(400)
+              .json({ error: "Failed to update vocabulary" });
+          }
+
+          // Fetch the updated lesson to return the updated vocab list
+          const updatedLesson = await lessonsCollection.findOne({
+            _id: objectId,
+          });
+
+          res.status(200).json({
+            message: "Vocabulary updated successfully",
+            updatedLesson,
+          });
+        } catch (error) {
+          console.error("Error updating vocabulary:", error);
+          res.status(500).json({ error: "Failed to update vocabulary" });
+        }
+      }
+    );
+
     // Create a route to delete a lesson by its lessonId
     app.delete("/lessons/:lessonId", async (req, res) => {
       try {
