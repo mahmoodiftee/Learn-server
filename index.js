@@ -1,11 +1,9 @@
 require("dotenv").config();
 const express = require("express");
 const { MongoClient, ObjectId } = require("mongodb");
-const bcrypt = require("bcrypt"); // For password hashing
-const jwt = require("jsonwebtoken"); // For JWT token generation
 const cors = require("cors");
 
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 5000;
 const app = express();
 
 app.use(cors());
@@ -21,30 +19,25 @@ const client = new MongoClient(uri, {
   },
 });
 
-// Connect to MongoDB
 async function run() {
   try {
     await client.connect();
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
 
-    // Get the database and collection
     const db = client.db("Learn");
     const lessonsCollection = db.collection("lessons");
     const ytLinksCollection = db.collection("ytLinks");
     const usersCollection = db.collection("users");
-    // Create a route to fetch all tutorials
+
     app.get("/tutorials", async (req, res) => {
       try {
         const tutorials = await ytLinksCollection.find({}).toArray();
         res.status(200).json(tutorials);
       } catch (error) {
-        console.error("Error fetching lessons:", error);
         res.status(500).json({ error: "Failed to fetch lessons" });
       }
     });
-    // Create a route to fetch a single lesson by its lesson number
+
     app.get("/lessons/:lessonId", async (req, res) => {
       try {
         const lessonId = req.params.lessonId;
@@ -55,26 +48,24 @@ async function run() {
         }
         res.status(200).json(lesson);
       } catch (error) {
-        console.error("Error fetching lesson:", error);
         res.status(500).json({ error: "Failed to fetch lesson" });
       }
     });
-    // Create a route to fetch all lessons
+
     app.get("/lessons", async (req, res) => {
       try {
         const lessons = await lessonsCollection.find({}).toArray();
         res.status(200).json(lessons);
       } catch (error) {
-        console.error("Error fetching lessons:", error);
         res.status(500).json({ error: "Failed to fetch lessons" });
       }
     });
+
     app.get("/users", async (req, res) => {
       try {
         const users = await usersCollection.find({}).toArray();
         res.status(200).json(users);
       } catch (error) {
-        console.error("Error fetching users:", error);
         res.status(500).json({ error: "Failed to fetch users" });
       }
     });
@@ -83,21 +74,13 @@ async function run() {
       try {
         const { lesson, title, description } = req.body;
         const existingLesson = await lessonsCollection.findOne({ lesson });
-
         if (existingLesson) {
-          return res.status(400).json({
-            error: "Lesson already exists",
-          });
+          return res.status(400).json({ error: "Lesson already exists" });
         }
-
         const newLesson = { lesson, title, description };
         const result = await lessonsCollection.insertOne(newLesson);
-        res.status(201).json({
-          message: "Lesson added successfully",
-          lesson: newLesson,
-        });
+        res.status(201).json({ message: "Lesson added successfully", lesson: newLesson });
       } catch (error) {
-        console.error("Error adding lesson:", error);
         res.status(500).json({ error: "Failed to add lesson" });
       }
     });
@@ -105,78 +88,30 @@ async function run() {
     app.post("/registration", async (req, res) => {
       try {
         const { name, email, password, profileImage } = req.body;
-
-        // Check if the email already exists
         const existingUser = await usersCollection.findOne({ email });
         if (existingUser) {
-          return res.status(400).json({
-            error: "Email already exists. Please use a different email.",
-          });
+          return res.status(400).json({ error: "Email already exists. Please use a different email." });
         }
-
-        // Hash the password before storing it
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newUser = {
-          name,
-          email,
-          password: hashedPassword,
-          profileImage: profileImage || null,
-          role: "user",
-        };
-
+        const newUser = { name, email, password, profileImage: profileImage || null, role: "user" };
         const result = await usersCollection.insertOne(newUser);
-        res.status(201).json({
-          message: "User registered successfully",
-          userId: result.insertedId,
-        });
+        res.status(201).json({ message: "User registered successfully", userId: result.insertedId });
       } catch (error) {
-        console.error("Error during registration:", error);
-        res
-          .status(500)
-          .json({ error: "An error occurred during registration." });
+        res.status(500).json({ error: "An error occurred during registration." });
       }
     });
 
     app.post("/login", async (req, res) => {
       try {
-        console.log("Login request received", req.body); // Log request body
-
         const { email, password } = req.body;
-
-        // Find user by email
         const user = await usersCollection.findOne({ email });
         if (!user) {
           return res.status(404).json({ error: "User not found" });
         }
-
-        // Check if the password is correct
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
+        if (password !== user.password) {
           return res.status(401).json({ error: "Invalid password" });
         }
-
-        // Generate JWT token
-        const token = jwt.sign(
-          { userId: user._id, email: user.email },
-          process.env.JWT_SECRET,
-          { expiresIn: "3h" }
-        );
-
-        // Send response with token and user info (without password)
-        res.status(200).json({
-          message: "Login successful",
-          user: {
-            id: user._id,
-            name: user.name,
-            email: user.email,
-            profileImage: user.profileImage,
-            role: user.role,
-          },
-          token,
-        });
+        res.status(200).json({ message: "Login successful", user: { id: user._id, name: user.name, email: user.email, profileImage: user.profileImage, role: user.role } });
       } catch (error) {
-        console.error("Error during login:", error);
         res.status(500).json({ error: "An error occurred during login" });
       }
     });
@@ -185,79 +120,39 @@ async function run() {
       try {
         const { lesson, title } = req.body;
         const lessonId = req.params.lessonId;
-
-        // Check if the lesson with the given ID exists
-        const existingLesson = await lessonsCollection.findOne({
-          _id: new ObjectId(lessonId), // Ensure the lesson exists first
-        });
-
+        const existingLesson = await lessonsCollection.findOne({ _id: new ObjectId(lessonId) });
         if (!existingLesson) {
-          return res.status(404).json({
-            success: false,
-            message: "Lesson not found.",
-          });
+          return res.status(404).json({ success: false, message: "Lesson not found." });
         }
-
-        // Check if the new lesson number already exists (excluding the current lesson being updated)
         const duplicateLesson = await lessonsCollection.findOne({
           lesson: lesson,
-          _id: { $ne: new ObjectId(lessonId) }, // Exclude the current lesson from the search
+          _id: { $ne: new ObjectId(lessonId) },
         });
-
         if (duplicateLesson) {
-          return res.status(400).json({
-            success: false,
-            message: "Lesson number already exists.",
-          });
+          return res.status(400).json({ success: false, message: "Lesson number already exists." });
         }
-
-        // Update the lesson
         const updatedLesson = await lessonsCollection.findOneAndUpdate(
-          { _id: new ObjectId(lessonId) }, // Find the lesson by its _id
-          { $set: { lesson, title } }, // Update lesson number and title
-          { returnDocument: "after" } // Return the updated document
+          { _id: new ObjectId(lessonId) },
+          { $set: { lesson, title } },
+          { returnDocument: "after" }
         );
-
-        res.status(200).json({
-          success: true,
-          message: "Lesson updated successfully",
-          data: updatedLesson.value,
-        });
+        res.status(200).json({ success: true, message: "Lesson updated successfully", data: updatedLesson.value });
       } catch (error) {
-        console.error("Error updating lesson:", error);
-        res
-          .status(500)
-          .json({ success: false, message: "Failed to update lesson" });
+        res.status(500).json({ success: false, message: "Failed to update lesson" });
       }
     });
 
     app.patch("/users/:id", async (req, res) => {
-      const { id } = req.params; // userId from the frontend
-      const { role } = req.body; // new role to update
-
-      console.log("Incoming ID:", id);
-
+      const { id } = req.params;
+      const { role } = req.body;
       try {
-        // Check if the ID is a valid MongoDB ObjectId
         if (!ObjectId.isValid(id)) {
-          console.error("Invalid ID format");
           return res.status(400).json({ message: "Invalid user ID" });
         }
-
         const query = { _id: new ObjectId(id) };
-        console.log("Query to MongoDB:", query);
-
-        // Update the role in the database
-        const updatedUser = await usersCollection.findOneAndUpdate(
-          query,
-          { $set: { role } },
-          { returnDocument: "after" } // Return the updated document
-        );
-
-        console.log("Updated User:", updatedUser.value);
+        const updatedUser = await usersCollection.findOneAndUpdate(query, { $set: { role } }, { returnDocument: "after" });
         res.status(200).json(updatedUser.value);
       } catch (error) {
-        console.error("Error updating role:", error);
         res.status(500).json({ message: "Error updating role", error });
       }
     });
@@ -266,220 +161,97 @@ async function run() {
       try {
         const lessonId = req.params.lessonId;
         const { word, pronunciation, meaning, when, adminEmail } = req.body;
-
-        // Find the lesson by lessonId (matching lesson number)
-        const lesson = await lessonsCollection.findOne({
-          lesson: parseInt(lessonId),
-        });
-
+        const lesson = await lessonsCollection.findOne({ lesson: parseInt(lessonId) });
         if (!lesson) {
           return res.status(404).json({ error: "Lesson not found" });
         }
-
-        // Create the new vocabulary object
-        const newVocab = {
-          word,
-          pronunciation,
-          meaning,
-          when,
-          lessonNo: parseInt(lessonId),
-          adminEmail,
-        };
-
-        // Use the $push operator to add the new vocab to the lesson's vocab array
+        const newVocab = { word, pronunciation, meaning, when, lessonNo: parseInt(lessonId), adminEmail };
         const updateResult = await lessonsCollection.updateOne(
-          { lesson: parseInt(lessonId) }, // Match lesson by lesson number
-          { $push: { vocab: newVocab } } // Push the new vocab into the vocab array
+          { lesson: parseInt(lessonId) },
+          { $push: { vocab: newVocab } }
         );
-
         if (updateResult.modifiedCount === 0) {
           return res.status(400).json({ error: "Failed to add vocabulary" });
         }
-
-        // Fetch the updated lesson with the new vocabulary
-        const updatedLesson = await lessonsCollection.findOne({
-          lesson: parseInt(lessonId),
-        });
-
-        res.status(200).json({
-          message: "Vocabulary added successfully",
-          updatedLesson,
-        });
+        const updatedLesson = await lessonsCollection.findOne({ lesson: parseInt(lessonId) });
+        res.status(200).json({ message: "Vocabulary added successfully", updatedLesson });
       } catch (error) {
-        console.error("Error adding vocabulary:", error);
         res.status(500).json({ error: "Failed to add vocabulary" });
       }
     });
 
-    // Update vocabulary in a specific lesson by lessonId and pronunciation
-    app.patch(
-      "/lessons/:lessonId/vocabulary/:pronunciation",
-      async (req, res) => {
-        try {
-          const { lessonId, pronunciation } = req.params;
-          const { word, meaning, when, lessonNo, adminEmail } = req.body;
-
-          // Convert lessonId to ObjectId for MongoDB query
-          const objectId = new ObjectId(lessonId);
-
-          // Find the lesson by its ObjectId
-          const lesson = await lessonsCollection.findOne({ _id: objectId });
-
-          if (!lesson) {
-            return res.status(404).json({ error: "Lesson not found" });
-          }
-
-          // Find the specific vocabulary item in the lesson's vocab array using pronunciation
-          const vocabIndex = lesson.vocab.findIndex(
-            (vocab) => vocab.pronunciation === pronunciation
-          );
-
-          if (vocabIndex === -1) {
-            return res.status(404).json({ error: "Vocabulary not found" });
-          }
-
-          // Update the vocabulary item in the array (modify fields as needed)
-          lesson.vocab[vocabIndex] = {
-            ...lesson.vocab[vocabIndex], // Keep existing fields
-            word: word || lesson.vocab[vocabIndex].word,
-            meaning: meaning || lesson.vocab[vocabIndex].meaning,
-            when: when || lesson.vocab[vocabIndex].when,
-            lessonNo: lessonNo || lesson.vocab[vocabIndex].lessonNo,
-            adminEmail: adminEmail || lesson.vocab[vocabIndex].adminEmail,
-          };
-
-          // Perform the update in the database using the $set operator
-          const updateResult = await lessonsCollection.updateOne(
-            { _id: objectId }, // Use ObjectId for querying
-            { $set: { vocab: lesson.vocab } }
-          );
-
-          if (updateResult.modifiedCount === 0) {
-            return res
-              .status(400)
-              .json({ error: "Failed to update vocabulary" });
-          }
-
-          // Fetch the updated lesson to return the updated vocab list
-          const updatedLesson = await lessonsCollection.findOne({
-            _id: objectId,
-          });
-
-          res.status(200).json({
-            message: "Vocabulary updated successfully",
-            updatedLesson,
-          });
-        } catch (error) {
-          console.error("Error updating vocabulary:", error);
-          res.status(500).json({ error: "Failed to update vocabulary" });
-        }
-      }
-    );
-
-    // Create a route to delete a lesson by its lessonId
-    app.delete("/lessons/:lessonId", async (req, res) => {
+    app.patch("/lessons/:lessonId/vocabulary/:pronunciation", async (req, res) => {
       try {
-        const lessonId = req.params.lessonId;
+        const { lessonId, pronunciation } = req.params;
+        const { word, meaning, when, lessonNo, adminEmail } = req.body;
         const objectId = new ObjectId(lessonId);
-
-        // Check if the lesson exists
         const lesson = await lessonsCollection.findOne({ _id: objectId });
         if (!lesson) {
           return res.status(404).json({ error: "Lesson not found" });
         }
-
-        // Delete the lesson
-        const result = await lessonsCollection.deleteOne({ _id: objectId });
-
-        // Check if the lesson was deleted
-        if (result.deletedCount === 0) {
-          return res.status(500).json({ error: "Failed to delete the lesson" });
+        const vocabIndex = lesson.vocab.findIndex((vocab) => vocab.pronunciation === pronunciation);
+        if (vocabIndex === -1) {
+          return res.status(404).json({ error: "Vocabulary not found" });
         }
+        lesson.vocab[vocabIndex] = { ...lesson.vocab[vocabIndex], word, meaning, when, lessonNo, adminEmail };
+        const updateResult = await lessonsCollection.updateOne({ _id: objectId }, { $set: { vocab: lesson.vocab } });
+        if (updateResult.modifiedCount === 0) {
+          return res.status(400).json({ error: "Failed to update vocabulary" });
+        }
+        const updatedLesson = await lessonsCollection.findOne({ _id: objectId });
+        res.status(200).json({ message: "Vocabulary updated successfully", updatedLesson });
+      } catch (error) {
+        res.status(500).json({ error: "Failed to update vocabulary" });
+      }
+    });
 
+    app.delete("/lessons/:lessonId", async (req, res) => {
+      try {
+        const lessonId = req.params.lessonId;
+        const objectId = new ObjectId(lessonId);
+        const lesson = await lessonsCollection.findOne({ _id: objectId });
+        if (!lesson) {
+          return res.status(404).json({ error: "Lesson not found" });
+        }
+        await lessonsCollection.deleteOne({ _id: objectId });
         res.status(200).json({ message: "Lesson deleted successfully" });
       } catch (error) {
-        console.error("Error deleting lesson:", error);
         res.status(500).json({ error: "Failed to delete lesson" });
       }
     });
-    app.delete("/users/:id", async (req, res) => {
-      const { id } = req.params;
+
+    app.delete("/lessons/:lessonId/vocabulary/:pronunciation", async (req, res) => {
       try {
-        if (!ObjectId.isValid(id)) {
-          return res.status(400).json({ message: "Invalid user ID" });
+        const { lessonId, pronunciation } = req.params;
+        const objectId = new ObjectId(lessonId);
+        const lesson = await lessonsCollection.findOne({ _id: objectId });
+        if (!lesson) {
+          return res.status(404).json({ error: "Lesson not found" });
         }
-
-        const query = { _id: new ObjectId(id) };
-        const result = await usersCollection.deleteOne(query);
-
-        if (result.deletedCount === 0) {
-          return res.status(404).json({ message: "User not found" });
+        const vocabIndex = lesson.vocab.findIndex((vocab) => vocab.pronunciation === pronunciation);
+        if (vocabIndex === -1) {
+          return res.status(404).json({ error: "Vocabulary not found" });
         }
-
-        res.status(200).json({ message: "User deleted successfully" });
+        lesson.vocab.splice(vocabIndex, 1);
+        const updateResult = await lessonsCollection.updateOne({ _id: objectId }, { $set: { vocab: lesson.vocab } });
+        if (updateResult.modifiedCount === 0) {
+          return res.status(400).json({ error: "Failed to delete vocabulary" });
+        }
+        const updatedLesson = await lessonsCollection.findOne({ _id: objectId });
+        res.status(200).json({ message: "Vocabulary deleted successfully", updatedLesson });
       } catch (error) {
-        console.error("Error deleting user:", error);
-        res.status(500).json({ message: "Error deleting user", error });
+        res.status(500).json({ error: "Failed to delete vocabulary" });
       }
     });
 
-    app.delete(
-      "/lessons/:lessonId/vocabulary/:pronunciation",
-      async (req, res) => {
-        try {
-          const { lessonId, pronunciation } = req.params;
-
-          // Convert lessonId to ObjectId for MongoDB query
-          const objectId = new ObjectId(lessonId);
-
-          // Find the lesson by its ObjectId
-          const lesson = await lessonsCollection.findOne({ _id: objectId });
-
-          if (!lesson) {
-            return res.status(404).json({ error: "Lesson not found" });
-          }
-
-          // Check if the vocab item exists within the vocab array of the lesson
-          const vocabIndex = lesson.vocab.findIndex(
-            (vocab) => vocab.pronunciation === pronunciation
-          );
-
-          if (vocabIndex === -1) {
-            return res.status(404).json({ error: "Vocabulary item not found" });
-          }
-
-          // Use the $pull operator to remove the vocab item from the vocab array
-          const updateResult = await lessonsCollection.updateOne(
-            { _id: objectId }, // Match the lesson by its ObjectId
-            { $pull: { vocab: { pronunciation: pronunciation } } } // Remove vocab by pronunciation
-          );
-
-          if (updateResult.modifiedCount === 0) {
-            return res
-              .status(400)
-              .json({ error: "Failed to delete vocabulary" });
-          }
-
-          res.status(200).json({ message: "Vocabulary deleted successfully" });
-        } catch (error) {
-          console.error("Error deleting vocabulary:", error);
-          res.status(500).json({ error: "Failed to delete vocabulary" });
-        }
-      }
-    );
   } catch (error) {
-    console.error("Error connecting to MongoDB:", error);
+    console.error(error);
+    process.exit(1);
   }
 }
 
-run().catch(console.dir);
+run();
 
-// Root route
-app.get("/", (req, res) => {
-  res.send("Learn server is running");
-});
-
-// Start the server
 app.listen(port, () => {
-  console.log(`Learn server is running on port ${port}`);
+  console.log(`Server is running on port ${port}`);
 });
