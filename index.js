@@ -8,17 +8,8 @@ const cors = require("cors");
 const port = process.env.PORT || 3001;
 const app = express();
 
-// Middleware
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173", // Your frontend's local URL
-      "http://localhost:5174",
-      "http://your-production-frontend.com", // Production URL
-    ],
-  })
-);
 
+app.use(cors()); 
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.fc0zsls.mongodb.net/?retryWrites=true&w=majority`;
@@ -238,6 +229,38 @@ async function run() {
         res
           .status(500)
           .json({ success: false, message: "Failed to update lesson" });
+      }
+    });
+
+
+    app.patch("/users/:id", async (req, res) => {
+      const { id } = req.params; // userId from the frontend
+      const { role } = req.body; // new role to update
+
+      console.log("Incoming ID:", id);
+
+      try {
+        // Check if the ID is a valid MongoDB ObjectId
+        if (!ObjectId.isValid(id)) {
+          console.error("Invalid ID format");
+          return res.status(400).json({ message: "Invalid user ID" });
+        }
+
+        const query = { _id: new ObjectId(id) };
+        console.log("Query to MongoDB:", query);
+
+        // Update the role in the database
+        const updatedUser = await usersCollection.findOneAndUpdate(
+          query,
+          { $set: { role } },
+          { returnDocument: "after" } // Return the updated document
+        );
+
+        console.log("Updated User:", updatedUser.value);
+        res.status(200).json(updatedUser.value);
+      } catch (error) {
+        console.error("Error updating role:", error);
+        res.status(500).json({ message: "Error updating role", error });
       }
     });
 
