@@ -357,6 +357,51 @@ async function run() {
         res.status(500).json({ message: "Error deleting user", error });
       }
     });
+
+    app.delete(
+      "/lessons/:lessonId/vocabulary/:pronunciation",
+      async (req, res) => {
+        try {
+          const { lessonId, pronunciation } = req.params;
+
+          // Convert lessonId to ObjectId for MongoDB query
+          const objectId = new ObjectId(lessonId);
+
+          // Find the lesson by its ObjectId
+          const lesson = await lessonsCollection.findOne({ _id: objectId });
+
+          if (!lesson) {
+            return res.status(404).json({ error: "Lesson not found" });
+          }
+
+          // Check if the vocab item exists within the vocab array of the lesson
+          const vocabIndex = lesson.vocab.findIndex(
+            (vocab) => vocab.pronunciation === pronunciation
+          );
+
+          if (vocabIndex === -1) {
+            return res.status(404).json({ error: "Vocabulary item not found" });
+          }
+
+          // Use the $pull operator to remove the vocab item from the vocab array
+          const updateResult = await lessonsCollection.updateOne(
+            { _id: objectId }, // Match the lesson by its ObjectId
+            { $pull: { vocab: { pronunciation: pronunciation } } } // Remove vocab by pronunciation
+          );
+
+          if (updateResult.modifiedCount === 0) {
+            return res
+              .status(400)
+              .json({ error: "Failed to delete vocabulary" });
+          }
+
+          res.status(200).json({ message: "Vocabulary deleted successfully" });
+        } catch (error) {
+          console.error("Error deleting vocabulary:", error);
+          res.status(500).json({ error: "Failed to delete vocabulary" });
+        }
+      }
+    );
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
