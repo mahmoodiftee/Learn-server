@@ -262,6 +262,55 @@ async function run() {
       }
     });
 
+    app.patch("/lessons/:lessonId/vocabulary", async (req, res) => {
+      try {
+        const lessonId = req.params.lessonId;
+        const { word, pronunciation, meaning, when, adminEmail } = req.body;
+
+        // Find the lesson by lessonId (matching lesson number)
+        const lesson = await lessonsCollection.findOne({
+          lesson: parseInt(lessonId),
+        });
+
+        if (!lesson) {
+          return res.status(404).json({ error: "Lesson not found" });
+        }
+
+        // Create the new vocabulary object
+        const newVocab = {
+          word,
+          pronunciation,
+          meaning,
+          when,
+          lessonNo: parseInt(lessonId),
+          adminEmail,
+        };
+
+        // Use the $push operator to add the new vocab to the lesson's vocab array
+        const updateResult = await lessonsCollection.updateOne(
+          { lesson: parseInt(lessonId) }, // Match lesson by lesson number
+          { $push: { vocab: newVocab } } // Push the new vocab into the vocab array
+        );
+
+        if (updateResult.modifiedCount === 0) {
+          return res.status(400).json({ error: "Failed to add vocabulary" });
+        }
+
+        // Fetch the updated lesson with the new vocabulary
+        const updatedLesson = await lessonsCollection.findOne({
+          lesson: parseInt(lessonId),
+        });
+
+        res.status(200).json({
+          message: "Vocabulary added successfully",
+          updatedLesson,
+        });
+      } catch (error) {
+        console.error("Error adding vocabulary:", error);
+        res.status(500).json({ error: "Failed to add vocabulary" });
+      }
+    });
+
     // Create a route to delete a lesson by its lessonId
     app.delete("/lessons/:lessonId", async (req, res) => {
       try {
